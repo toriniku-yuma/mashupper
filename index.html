@@ -118,7 +118,7 @@
     <script src="https://www.youtube.com/iframe_api"></script>
 
     <header class="bg-base-300 p-4 rounded-lg shadow-lg mb-4 sticky top-0 z-50">
-        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex flex-col sm:flex-col justify-start items-center sm:items-start gap-4">
             <h1 class="text-2xl sm:text-3xl font-bold text-primary">
                 <i class="fas fa-headphones-alt mr-2"></i>YouTubeマッシュアップスタジオ
             </h1>
@@ -277,7 +277,12 @@
 
         let globalTapTempoTimes_measurement = []; 
         let masterTapTempoTimes = [];
-        const MAX_TAP_TEMPO_TIMES = 4; 
+        // const MAX_TAP_TEMPO_TIMES = 4; // Replaced by MIN_TAPS_FOR_ACCURATE_BPM and MAX_STORED_TAPS
+        const MIN_TAPS_FOR_ACCURATE_BPM = 10;
+        const MAX_STORED_TAPS = 15;
+        const OUTLIER_REMOVAL_MIN_INTERVALS = 5; // Min intervals to attempt outlier removal
+        const OUTLIER_FILTERED_MIN_INTERVALS = 3; // Min intervals to keep after filtering
+        const OUTLIER_STD_DEV_THRESHOLD = 1.5;
 
         let currentPlayingPlaylist = null; 
         let isPlaylistPaused = false;
@@ -656,6 +661,18 @@
             
             player.seekTo(track.startTime, true); 
             console.log(`Player ready for track ${trackId}, duration: ${duration}, start: ${track.startTime}, end: ${track.endTime}`);
+
+            // New autoplay-pause sequence to "warm up" the player
+            player.playVideo();
+            setTimeout(() => {
+                // Check if the player instance still exists and if it's actually playing
+                const currentTrack = tracks.find(t => t.id === trackId);
+                if (currentTrack && currentTrack.playerInstance && typeof currentTrack.playerInstance.getPlayerState === 'function') {
+                    if (currentTrack.playerInstance.getPlayerState() === YT.PlayerState.PLAYING) {
+                        currentTrack.playerInstance.pauseVideo();
+                    }
+                }
+            }, 200); // 200ms delay
         }
 
         function onPlayerStateChange(event, trackId) {
@@ -1121,23 +1138,70 @@
         function handleTapTempo(timesArray, callbackUpdate, displayElement = null) {
             const now = Date.now();
             timesArray.push(now);
-            if (timesArray.length > MAX_TAP_TEMPO_TIMES) {
-                timesArray.shift(); 
+
+            // Keep the array size within MAX_STORED_TAPS
+            if (timesArray.length > MAX_STORED_TAPS) {
+                timesArray.shift();
             }
-            if (timesArray.length > 1) {
-                const intervals = [];
-                for (let i = 1; i < timesArray.length; i++) {
-                    intervals.push(timesArray[i] - timesArray[i-1]);
+
+            if (timesArray.length < MIN_TAPS_FOR_ACCURATE_BPM) {
+                if (displayElement) {
+                    const tapsNeeded = MIN_TAPS_FOR_ACCURATE_BPM - timesArray.length;
+                    displayElement.textContent = `TAP... (${tapsNeeded} more)`;
                 }
-                const avgInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
-                if (avgInterval > 0) {
-                    const calculatedBPM = Math.round(60000 / avgInterval);
-                    const newBpm = Math.max(30, Math.min(300, calculatedBPM));
-                    if (callbackUpdate) callbackUpdate(newBpm);
-                    if (displayElement) displayElement.textContent = `BPM: ${newBpm}`;
+                // If a callback exists (like for master BPM), clear it or set to a default
+                // For masterTapTempoTimes, we don't want to update the masterBPM input yet.
+                // For globalTapBPMDisplay, the message above is sufficient.
+                return; // Not enough taps yet for an accurate BPM
+            }
+
+            // We have enough taps (>= MIN_TAPS_FOR_ACCURATE_BPM)
+            // Calculate intervals from the available taps (could be up to MAX_STORED_TAPS)
+            const currentIntervals = [];
+            // Use all available timestamps if less than MAX_STORED_TAPS, or the most recent MAX_STORED_TAPS worth
+            const relevantTimes = timesArray.slice(Math.max(0, timesArray.length - MAX_STORED_TAPS));
+            for (let i = 1; i < relevantTimes.length; i++) {
+                currentIntervals.push(relevantTimes[i] - relevantTimes[i-1]);
+            }
+
+            if (currentIntervals.length === 0) { // Should not happen if timesArray.length >= MIN_TAPS_FOR_ACCURATE_BPM (which implies >= 2 timestamps)
+                 if (displayElement) displayElement.textContent = "BPM: Error";
+                 return;
+            }
+
+            let avgInterval;
+
+            if (currentIntervals.length >= OUTLIER_REMOVAL_MIN_INTERVALS) {
+                const mean = currentIntervals.reduce((sum, val) => sum + val, 0) / currentIntervals.length;
+                const squaredDifferences = currentIntervals.map(val => Math.pow(val - mean, 2));
+                const variance = squaredDifferences.reduce((sum, val) => sum + val, 0) / currentIntervals.length;
+                const stdDev = Math.sqrt(variance);
+                
+                const filteredIntervals = currentIntervals.filter(val => Math.abs(val - mean) <= OUTLIER_STD_DEV_THRESHOLD * stdDev);
+
+                if (filteredIntervals.length >= OUTLIER_FILTERED_MIN_INTERVALS) {
+                    avgInterval = filteredIntervals.reduce((sum, val) => sum + val, 0) / filteredIntervals.length;
+                } else {
+                    // Fallback: use the original mean if too many outliers were removed or not enough valid intervals
+                    avgInterval = mean;
+                }
+            } else {
+                // Not enough intervals for robust outlier removal, use the simple average
+                avgInterval = currentIntervals.reduce((sum, val) => sum + val, 0) / currentIntervals.length;
+            }
+
+            if (avgInterval > 0) {
+                const calculatedBPM = Math.round(60000 / avgInterval);
+                const newBpm = Math.max(30, Math.min(300, calculatedBPM)); // Clamp BPM to a reasonable range
+                if (callbackUpdate) {
+                    callbackUpdate(newBpm);
+                }
+                if (displayElement) {
+                    displayElement.textContent = `BPM: ${newBpm}`;
                 }
             } else if (displayElement) {
-                displayElement.textContent = "BPM: TAP...";
+                // This case should ideally not be reached if intervals are correctly calculated
+                displayElement.textContent = "BPM: Error";
             }
         }
 
