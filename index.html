@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTubeマッシュアップスタジオ</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.11.1/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none; 
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2a303c; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096; 
+        }
+        .track-timeline-bg {
+            background-color: #4a5568; 
+            height: 20px;
+            position: relative;
+            border-radius: 0.375rem; 
+            overflow: hidden; 
+        }
+        .track-timeline-selection {
+            background-color: #3b82f6; 
+            height: 100%;
+            position: absolute;
+            opacity: 0.7;
+        }
+        
+        input[type="range"].timeline-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 20px;
+            background: transparent;
+            position: absolute;
+            top: 0;
+            left: 0;
+            margin: 0;
+            z-index: 5; 
+            pointer-events: none; 
+        }
+
+        input[type="range"].timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px; 
+            height: 28px;
+            background: #f59e0b; 
+            cursor: ew-resize;
+            border-radius: 3px;
+            border: 1px solid #1f2937; 
+            margin-top: -4px; 
+            pointer-events: auto; 
+        }
+
+        input[type="range"].timeline-slider::-moz-range-thumb {
+            width: 14px;
+            height: 28px;
+            background: #f59e0b; 
+            cursor: ew-resize;
+            border-radius: 3px;
+            border: 1px solid #1f2937; 
+            pointer-events: auto; 
+        }
+        .loading-spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999; 
+        }
+        .modal-box {
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .player-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+            background-color: #1a1a1a; 
+            color: #6b7280; 
+            border-radius: 0.375rem; 
+        }
+        .time-input {
+            width: 100px; 
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-base-200 text-base-content min-h-screen p-4 flex flex-col">
+
+    <div id="loadingOverlay" class="loading-spinner-overlay hidden">
+        <span class="loading loading-dots loading-lg text-primary"></span>
+    </div>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <header class="bg-base-300 p-4 rounded-lg shadow-lg mb-4 sticky top-0 z-50">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary">
+                <i class="fas fa-headphones-alt mr-2"></i>YouTubeマッシュアップスタジオ
+            </h1>
+            <div class="flex flex-wrap gap-2 sm:gap-4 items-center">
+                 <div class="form-control">
+                    <label class="label pb-1"><span class="label-text">BPM計測</span></label>
+                    <div class="join">
+                        <button id="globalTapTempoBtn" class="btn btn-accent join-item">TAP HERE</button>
+                        <div id="globalTapBPMDisplay" class="bg-accent-content text-accent p-2 join-item rounded-r-lg text-center w-28">BPM: ---</div>
+                    </div>
+                </div>
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text">マスターBPM</span>
+                    </label>
+                    <div class="join">
+                        <input id="masterBPM" type="number" value="120" min="30" max="300" class="input input-bordered join-item w-24 text-center">
+                        <button id="masterTapTempoBtn" class="btn btn-secondary join-item">TAP</button>
+                    </div>
+                </div>
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text">マスター音量</span>
+                    </label>
+                    <input id="masterVolume" type="range" min="0" max="100" value="80" class="range range-primary w-24 sm:w-32">
+                </div>
+                 <button id="playAllBtn" class="btn btn-success"><i class="fas fa-play mr-1"></i>全体再生</button>
+                 <button id="pauseAllBtn" class="btn btn-warning"><i class="fas fa-pause mr-1"></i>全体停止</button>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-4">
+            <button id="addTrackBtn" class="btn btn-primary"><i class="fas fa-plus mr-1"></i>トラック追加</button>
+            <button id="saveMashupBtn" class="btn btn-accent"><i class="fas fa-save mr-1"></i>マッシュアップ保存</button>
+            <button id="loadMashupBtn" class="btn btn-info"><i class="fas fa-folder-open mr-1"></i>マッシュアップ読込</button>
+            <button id="playlistMenuBtn" class="btn btn-neutral"><i class="fas fa-list-music mr-1"></i>再生リスト</button>
+        </div>
+    </header>
+
+    <main id="tracksContainer" class="flex-grow space-y-4 overflow-y-auto pb-16">
+        </main>
+
+    <dialog id="saveMashupModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">マッシュアップを保存</h3>
+            <div class="py-4 space-y-2">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text">マッシュアップ名:</span></div>
+                    <input type="text" id="mashupNameInput" placeholder="例: 最高のマッシュアップ" class="input input-bordered w-full" />
+                </label>
+            </div>
+            <div class="modal-action">
+                <button id="confirmSaveMashupBtn" class="btn btn-primary">保存</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('saveMashupModal').close()">キャンセル</button>
+            </div>
+        </div>
+         <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <dialog id="loadMashupModal" class="modal">
+        <div class="modal-box w-11/12 max-w-3xl">
+            <h3 class="font-bold text-lg">マッシュアップを読み込む</h3>
+            <div id="mashupListContainer" class="py-4 space-y-2 max-h-96 overflow-y-auto">
+                </div>
+            <div class="modal-action">
+                 <button class="btn btn-ghost" onclick="document.getElementById('loadMashupModal').close()">閉じる</button>
+            </div>
+        </div>
+         <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <dialog id="playlistMenuModal" class="modal">
+        <div class="modal-box w-11/12 max-w-4xl">
+            <h3 class="font-bold text-lg mb-4">再生リスト管理</h3>
+            <div class="tabs tabs-lifted mb-4">
+                <button class="tab tab-active" data-tab-target="viewPlaylistsTabContent">リスト表示</button>
+                <button class="tab" data-tab-target="createOrEditPlaylistTabContent">新規作成/編集</button>
+            </div>
+
+            <div id="viewPlaylistsTabContent" class="tab-content-panel space-y-4">
+                <div id="playlistsListContainer" class="space-y-2 max-h-80 overflow-y-auto">
+                    </div>
+            </div>
+
+            <div id="createOrEditPlaylistTabContent" class="tab-content-panel hidden space-y-4">
+                <input type="hidden" id="editingPlaylistIdInput">
+                <label class="form-control w-full">
+                    <div class="label"><span class="label-text" id="playlistFormTitle">新しい再生リスト名:</span></div>
+                    <input type="text" id="playlistNameInput" placeholder="例: お気に入り集" class="input input-bordered w-full" />
+                </label>
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <span class="label-text">リピート再生</span>
+                        <input type="checkbox" id="playlistRepeatToggle" class="toggle toggle-primary" />
+                    </label>
+                </div>
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <span class="label-text">シャッフル再生</span>
+                        <input type="checkbox" id="playlistShuffleToggle" class="toggle toggle-secondary" />
+                    </label>
+                </div>
+                <h4 class="font-semibold mt-4">マッシュアップを選択 (ドラッグ&ドロップで並び替え可能):</h4>
+                <div id="mashupsForPlaylistContainer" class="space-y-1 max-h-60 overflow-y-auto border border-base-content/20 p-2 rounded-md bg-base-200">
+                    </div>
+                <div class="mt-4 flex gap-2">
+                    <button id="saveOrUpdatePlaylistBtn" class="btn btn-primary">保存</button>
+                    <button id="cancelPlaylistEditBtn" class="btn btn-ghost hidden">キャンセル</button>
+                </div>
+            </div>
+             <div class="modal-action mt-6">
+                <button class="btn btn-ghost" onclick="document.getElementById('playlistMenuModal').close()">閉じる</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <dialog id="addToPlaylistModal" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">再生リストに追加</h3>
+            <p class="py-2">どの再生リストにこのマッシュアップを追加しますか？</p>
+            <div id="availablePlaylistsForAddingContainer" class="py-2 space-y-2 max-h-60 overflow-y-auto">
+                </div>
+             <input type="hidden" id="mashupIdToAddToPlaylistInput">
+            <div class="modal-action">
+                <button class="btn btn-ghost" onclick="document.getElementById('addToPlaylistModal').close()">キャンセル</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+    <dialog id="messageModal" class="modal">
+        <div class="modal-box">
+            <h3 id="messageModalTitle" class="font-bold text-lg"></h3>
+            <p id="messageModalBody" class="py-4"></p>
+            <div class="modal-action">
+                <button id="messageModalOkBtn" class="btn btn-primary">OK</button>
+                <button id="messageModalCancelBtn" class="btn btn-ghost hidden">キャンセル</button>
+            </div>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+
+
+    <script>
+        // --- Global Variables & Configuration ---
+        let tracks = [];
+        let players = {}; 
+        let masterBPM = 120;
+        let masterVolume = 80;
+        let nextTrackId = 0;
+        let db; 
+        const DB_NAME = 'MashupStudioDB_v6'; // Incremented version for schema changes
+        const DB_VERSION = 6; 
+        const MASHUPS_STORE_NAME = 'mashups';
+        const PLAYLISTS_STORE_NAME = 'playlists';
+
+        let globalTapTempoTimes_measurement = []; 
+        let masterTapTempoTimes = [];
+        const MAX_TAP_TEMPO_TIMES = 4; 
+
+        let currentPlayingPlaylist = null; 
+        let isPlaylistPaused = false;
+
+
+        // --- DOM Elements ---
+        const tracksContainer = document.getElementById('tracksContainer');
+        const masterBPMInput = document.getElementById('masterBPM');
+        const masterVolumeInput = document.getElementById('masterVolume');
+        const addTrackBtn = document.getElementById('addTrackBtn');
+        const globalTapTempoBtn = document.getElementById('globalTapTempoBtn');
+        const globalTapBPMDisplay = document.getElementById('globalTapBPMDisplay');
+        const masterTapTempoBtn = document.getElementById('masterTapTempoBtn');
+        const saveMashupBtn = document.getElementById('saveMashupBtn');
+        const loadMashupBtn = document.getElementById('loadMashupBtn');
+        const playlistMenuBtn = document.getElementById('playlistMenuBtn');
+        const playAllBtn = document.getElementById('playAllBtn');
+        const pauseAllBtn = document.getElementById('pauseAllBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+
+        // Modals (same as before)
+        const saveMashupModal = document.getElementById('saveMashupModal');
+        const mashupNameInput = document.getElementById('mashupNameInput');
+        const confirmSaveMashupBtn = document.getElementById('confirmSaveMashupBtn');
+        const loadMashupModal = document.getElementById('loadMashupModal');
+        const mashupListContainer = document.getElementById('mashupListContainer');
+        const playlistMenuModal = document.getElementById('playlistMenuModal');
+        const viewPlaylistsTabContent = document.getElementById('viewPlaylistsTabContent');
+        const createOrEditPlaylistTabContent = document.getElementById('createOrEditPlaylistTabContent');
+        const playlistsListContainer = document.getElementById('playlistsListContainer');
+        const editingPlaylistIdInput = document.getElementById('editingPlaylistIdInput');
+        const playlistFormTitle = document.getElementById('playlistFormTitle');
+        const playlistNameInput = document.getElementById('playlistNameInput');
+        const playlistRepeatToggle = document.getElementById('playlistRepeatToggle');
+        const playlistShuffleToggle = document.getElementById('playlistShuffleToggle');
+        const mashupsForPlaylistContainer = document.getElementById('mashupsForPlaylistContainer');
+        const saveOrUpdatePlaylistBtn = document.getElementById('saveOrUpdatePlaylistBtn');
+        const cancelPlaylistEditBtn = document.getElementById('cancelPlaylistEditBtn');
+        const addToPlaylistModal = document.getElementById('addToPlaylistModal');
+        const availablePlaylistsForAddingContainer = document.getElementById('availablePlaylistsForAddingContainer');
+        const mashupIdToAddToPlaylistInput = document.getElementById('mashupIdToAddToPlaylistInput');
+        const messageModal = document.getElementById('messageModal');
+        const messageModalTitle = document.getElementById('messageModalTitle');
+        const messageModalBody = document.getElementById('messageModalBody');
+        const messageModalOkBtn = document.getElementById('messageModalOkBtn');
+        const messageModalCancelBtn = document.getElementById('messageModalCancelBtn');
+
+        // --- Utility Functions ---
+        function showLoading(show = true) {
+            loadingOverlay.classList.toggle('hidden', !show);
+        }
+
+        function showMessage(title, body, onOk = null, showCancel = false, onCancel = null) {
+            messageModalTitle.textContent = title;
+            messageModalBody.textContent = body;
+            messageModalOkBtn.onclick = () => {
+                if (onOk) onOk();
+                messageModal.close();
+            };
+            if (showCancel) {
+                messageModalCancelBtn.classList.remove('hidden');
+                messageModalCancelBtn.onclick = () => {
+                    if (onCancel) onCancel();
+                    messageModal.close();
+                };
+            } else {
+                messageModalCancelBtn.classList.add('hidden');
+            }
+            if (!messageModal.open) messageModal.showModal();
+        }
+
+        function getYouTubeVideoId(url) {
+            if (!url) return null;
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+        
+        function parseTimeWithMillis(timeStr) {
+            if (!timeStr || typeof timeStr !== 'string') return 0;
+            const parts = timeStr.split(':');
+            let seconds = 0;
+            if (parts.length === 2) { 
+                seconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+            } else if (parts.length === 1) { 
+                seconds = parseFloat(parts[0]);
+            }
+            return isNaN(seconds) ? 0 : Math.max(0, seconds); // Ensure non-negative
+        }
+
+        function formatTimeWithMillis(totalSeconds) {
+            if (isNaN(totalSeconds) || totalSeconds < 0) return "00:00.000";
+            const minutes = Math.floor(totalSeconds / 60);
+            const mainSeconds = Math.floor(totalSeconds % 60);
+            const milliseconds = Math.floor((totalSeconds - Math.floor(totalSeconds)) * 1000);
+            return `${String(minutes).padStart(2, '0')}:${String(mainSeconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+        }
+
+
+        // --- IndexedDB Functions ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains(MASHUPS_STORE_NAME)) {
+                        db.createObjectStore(MASHUPS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                    }
+                    if (event.oldVersion < DB_VERSION && db.objectStoreNames.contains(PLAYLISTS_STORE_NAME)) { 
+                         db.deleteObjectStore(PLAYLISTS_STORE_NAME);
+                    }
+                    if (!db.objectStoreNames.contains(PLAYLISTS_STORE_NAME)) {
+                        const playlistStore = db.createObjectStore(PLAYLISTS_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        playlistStore.createIndex('name', 'name', { unique: false });
+                    }
+                };
+                request.onsuccess = (event) => { db = event.target.result; resolve(db); };
+                request.onerror = (event) => {
+                    console.error("IndexedDB error:", event.target.errorCode);
+                    showMessage("データベースエラー", "データベースの初期化に失敗しました。");
+                    reject(event.target.errorCode);
+                };
+            });
+        }
+        async function saveMashup(mashupData) { 
+            if (!db) { showMessage("エラー", "データベースが初期化されていません。"); return; }
+            showLoading();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([MASHUPS_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(MASHUPS_STORE_NAME);
+                const request = mashupData.id ? store.put(mashupData) : store.add(mashupData);
+
+                request.onsuccess = () => {
+                    showMessage("成功", `マッシュアップ「${mashupData.name}」を${mashupData.id ? '更新' : '保存'}しました！`);
+                    resolve(request.result);
+                };
+                request.onerror = (event) => {
+                    console.error("Save/Update mashup error:", event.target.error);
+                    showMessage("保存失敗", "マッシュアップの保存/更新に失敗しました。");
+                    reject(event.target.error);
+                };
+                transaction.oncomplete = () => showLoading(false);
+            });
+        }
+        async function getMashups() {
+            if (!db) return Promise.resolve([]);
+            showLoading(true); 
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([MASHUPS_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(MASHUPS_STORE_NAME);
+                const request = store.getAll();
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = (event) => {
+                    console.error("Get mashups error:", event.target.error);
+                    showMessage("読込失敗", "マッシュアップリストの読み込みに失敗しました。");
+                    reject(event.target.error);
+                };
+                 transaction.oncomplete = () => showLoading(false);
+            });
+         }
+        async function getMashupById(id) {
+            if (!db) return Promise.resolve(null);
+            showLoading(true);
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([MASHUPS_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(MASHUPS_STORE_NAME);
+                const request = store.get(id);
+
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = (event) => {
+                    console.error("Get mashup by ID error:", event.target.error);
+                    reject(event.target.error);
+                };
+                transaction.oncomplete = () => showLoading(false);
+            });
+         }
+        async function deleteMashup(id) {
+            if (!db) return;
+            showLoading();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([MASHUPS_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(MASHUPS_STORE_NAME);
+                const request = store.delete(id);
+
+                request.onsuccess = async () => {
+                    showMessage("成功", "マッシュアップを削除しました。");
+                    const playlists = await getPlaylists();
+                    for (const pl of playlists) {
+                        const initialLength = pl.mashupIds.length;
+                        pl.mashupIds = pl.mashupIds.filter(mId => mId !== id);
+                        if (pl.mashupIds.length < initialLength) {
+                            await saveOrUpdatePlaylist(pl, true); 
+                        }
+                    }
+                    resolve();
+                };
+                request.onerror = (event) => {
+                    console.error("Delete mashup error:", event.target.error);
+                    showMessage("削除失敗", "マッシュアップの削除に失敗しました。");
+                    reject(event.target.error);
+                };
+                transaction.oncomplete = () => {
+                    showLoading(false);
+                    populateLoadMashupModal(); 
+                    populatePlaylistsTab(); 
+                }
+            });
+         }
+        async function saveOrUpdatePlaylist(playlistData, silent = false) {
+            if (!db) return;
+            if (!silent) showLoading();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([PLAYLISTS_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(PLAYLISTS_STORE_NAME);
+                const request = playlistData.id ? store.put(playlistData) : store.add(playlistData);
+
+                request.onsuccess = () => {
+                    if (!silent) showMessage("成功", `再生リスト「${playlistData.name}」を${playlistData.id ? '更新' : '保存'}しました！`);
+                    resolve(request.result);
+                };
+                request.onerror = (e) => {
+                    if (!silent) showMessage("保存失敗", "再生リストの保存/更新に失敗しました。");
+                    console.error("Save/Update playlist error:", e.target.error);
+                    reject(e.target.error);
+                };
+                transaction.oncomplete = () => {
+                    if (!silent) showLoading(false);
+                }
+            });
+         }
+        async function getPlaylists() {
+            if (!db) return Promise.resolve([]);
+            showLoading(true);
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([PLAYLISTS_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(PLAYLISTS_STORE_NAME);
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result.map(p => ({...p, mashupIds: p.mashupIds || []}))); 
+                request.onerror = (e) => {
+                    showMessage("読込失敗", "再生リストの読み込みに失敗しました。");
+                    console.error("Get playlists error:", e.target.error);
+                    reject(e.target.error);
+                };
+                 transaction.oncomplete = () => showLoading(false);
+            });
+        }
+        async function getPlaylistById(id) {
+            if (!db) return Promise.resolve(null);
+            showLoading(true);
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([PLAYLISTS_STORE_NAME], 'readonly');
+                const store = transaction.objectStore(PLAYLISTS_STORE_NAME);
+                const request = store.get(id);
+                request.onsuccess = () => resolve(request.result ? {...request.result, mashupIds: request.result.mashupIds || []} : null);
+                request.onerror = (e) => {
+                    showMessage("読込失敗", "再生リストの読み込みに失敗しました。");
+                    reject(e.target.error);
+                };
+                transaction.oncomplete = () => showLoading(false);
+            });
+         }
+        async function deletePlaylist(id) {
+            if (!db) return;
+            showLoading();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([PLAYLISTS_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(PLAYLISTS_STORE_NAME);
+                const request = store.delete(id);
+                request.onsuccess = () => {
+                    showMessage("成功", "再生リストを削除しました。");
+                    resolve();
+                };
+                request.onerror = (e) => {
+                    showMessage("削除失敗", "再生リストの削除に失敗しました。");
+                    reject(e.target.error);
+                };
+                transaction.oncomplete = () => {
+                    showLoading(false);
+                    populatePlaylistsTab(); 
+                }
+            });
+         }
+
+        // --- YouTube Player API ---
+        function onYouTubeIframeAPIReady() {
+            console.log("YouTube API Ready!");
+            addNewTrack(); 
+        }
+
+        function createPlayer(trackId, videoId, track) {
+            const playerDivId = `player-${trackId}`;
+            const playerContainer = document.getElementById(trackId)?.querySelector('.player-container');
+            if (!playerContainer) {
+                 console.error(`Player container not found for track ${trackId}`);
+                 return;
+            }
+            playerContainer.innerHTML = `<div id="${playerDivId}" class="w-full h-full"></div>`;
+
+            if (players[trackId]) {
+                try { players[trackId].destroy(); } catch (e) { console.warn("Old player destroy failed", e); }
+            }
+            
+            try {
+                players[trackId] = new YT.Player(playerDivId, {
+                    height: '100%', width: '100%', videoId: videoId,
+                    playerVars: { 'playsinline': 1, 'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'origin': window.location.origin },
+                    events: {
+                        'onReady': (event) => onPlayerReady(event, trackId),
+                        'onStateChange': (event) => onPlayerStateChange(event, trackId),
+                        'onError': (event) => onPlayerError(event, trackId)
+                    }
+                });
+                track.playerInstance = players[trackId]; 
+            } catch (error) {
+                console.error("Error creating YouTube player:", error);
+                showMessage("プレイヤーエラー", `YouTubeプレイヤーの作成に失敗しました (Track ID: ${trackId}).`);
+                if (playerContainer) playerContainer.innerHTML = `<div class="player-placeholder">プレイヤーの読込エラー</div>`;
+            }
+        }
+
+        function onPlayerReady(event, trackId) {
+            const player = event.target;
+            const track = tracks.find(t => t.id === trackId);
+            if (!track) return;
+
+            player.setVolume(track.volume * (masterVolume / 100));
+            const duration = player.getDuration();
+            track.duration = duration;
+            
+            // Default to full range if not otherwise specified or invalid
+            let finalStartTime = 0;
+            let finalEndTime = track.duration;
+
+            // If track has pre-existing startTime/endTime (e.g. from loaded mashup), validate them
+            if (track.startTime !== undefined && track.endTime !== undefined && track.endTime > 0) {
+                if (track.startTime >= 0 && track.startTime < track.duration &&
+                    track.endTime > track.startTime && track.endTime <= track.duration) {
+                    finalStartTime = track.startTime;
+                    finalEndTime = track.endTime;
+                }
+            }
+            track.startTime = finalStartTime;
+            track.endTime = finalEndTime;
+
+
+            const trackElement = document.getElementById(`track-${trackId}`);
+            if (trackElement) {
+                trackElement.querySelector('.video-duration-display').textContent = formatTimeWithMillis(duration);
+                
+                const startTimeInput = trackElement.querySelector('.start-time-text-input');
+                const endTimeInput = trackElement.querySelector('.end-time-text-input');
+                startTimeInput.value = formatTimeWithMillis(track.startTime);
+                endTimeInput.value = formatTimeWithMillis(track.endTime);
+
+                const startTimeSlider = trackElement.querySelector('.start-time-slider');
+                const endTimeSlider = trackElement.querySelector('.end-time-slider');
+                startTimeSlider.max = duration; // Set max before value
+                endTimeSlider.max = duration;
+                startTimeSlider.value = track.startTime;
+                endTimeSlider.value = track.endTime;
+                
+                const seekBar = trackElement.querySelector('.track-seek-bar');
+                const currentTimeDisplay = trackElement.querySelector('.track-current-time-display');
+                if (seekBar) {
+                    seekBar.max = duration;
+                    seekBar.value = track.startTime; 
+                }
+                if (currentTimeDisplay) {
+                    currentTimeDisplay.textContent = formatTimeWithMillis(track.startTime); 
+                }
+
+                updateTimelineVisual(trackId);
+                updatePlaybackRate(track.id); 
+            }
+            
+            player.seekTo(track.startTime, true); 
+            console.log(`Player ready for track ${trackId}, duration: ${duration}, start: ${track.startTime}, end: ${track.endTime}`);
+        }
+
+        function onPlayerStateChange(event, trackId) {
+            const track = tracks.find(t => t.id === trackId);
+            if (!track || !track.playerInstance) return;
+            const player = track.playerInstance;
+            const trackElement = document.getElementById(`track-${trackId}`);
+
+            if (trackElement) {
+                const playPauseBtn = trackElement.querySelector('.play-pause-track-btn');
+                if (playPauseBtn) {
+                    if (event.data === YT.PlayerState.PLAYING) {
+                        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                    } else { 
+                        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                    }
+                }
+
+                const seekBar = trackElement.querySelector('.track-seek-bar');
+                const currentTimeDisplay = trackElement.querySelector('.track-current-time-display');
+
+                if (event.data === YT.PlayerState.PLAYING) {
+                    track.isPlaying = true;
+                    if (track.seekBarInterval) clearInterval(track.seekBarInterval);
+                    track.seekBarInterval = setInterval(() => {
+                        if (!track.playerInstance || typeof track.playerInstance.getCurrentTime !== 'function') {
+                             if (track.seekBarInterval) clearInterval(track.seekBarInterval); 
+                             track.seekBarInterval = null;
+                             return;
+                        }
+                        const currentTime = track.playerInstance.getCurrentTime();
+                        if (seekBar) seekBar.value = currentTime;
+                        if (currentTimeDisplay) currentTimeDisplay.textContent = formatTimeWithMillis(currentTime);
+                        
+                        // Check if current time exceeds defined end time
+                        if (currentTime >= track.endTime - 0.05) { // Small buffer for precision
+                            if (track.seekBarInterval) clearInterval(track.seekBarInterval);
+                            track.seekBarInterval = null;
+                            if (currentPlayingPlaylist && currentPlayingPlaylist.trackId === track.id) {
+                                // Playlist logic will handle advancement via YT.PlayerState.ENDED
+                            } else { 
+                                track.playerInstance.seekTo(track.startTime, true);
+                                track.playerInstance.pauseVideo(); 
+                            }
+                        }
+                    }, 100); 
+                } else { 
+                    track.isPlaying = false;
+                    if (track.seekBarInterval) {
+                        clearInterval(track.seekBarInterval);
+                        track.seekBarInterval = null;
+                    }
+                    if (track.playerInstance && typeof track.playerInstance.getCurrentTime === 'function' && seekBar && currentTimeDisplay) {
+                         const currentTime = track.playerInstance.getCurrentTime();
+                         if (isFinite(currentTime)) { // Ensure currentTime is a valid number
+                            seekBar.value = currentTime;
+                            currentTimeDisplay.textContent = formatTimeWithMillis(currentTime);
+                         }
+                    }
+                }
+            }
+
+            if (event.data === YT.PlayerState.ENDED) {
+                if (track.seekBarInterval) {
+                    clearInterval(track.seekBarInterval);
+                    track.seekBarInterval = null;
+                }
+                const playPauseBtn = trackElement?.querySelector('.play-pause-track-btn');
+                if (playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                
+                // Update seek bar to endTime or startTime depending on context
+                const seekBar = trackElement?.querySelector('.track-seek-bar');
+                const currentTimeDisplay = trackElement?.querySelector('.track-current-time-display');
+                if (seekBar) seekBar.value = track.startTime; // Reset to start visually
+                if (currentTimeDisplay) currentTimeDisplay.textContent = formatTimeWithMillis(track.startTime);
+
+
+                if (currentPlayingPlaylist && currentPlayingPlaylist.trackId === track.id) {
+                    playNextMashupInPlaylist();
+                } else {
+                    player.seekTo(track.startTime, true); // Seek to start of defined segment
+                    // Player is already paused or ended, no need to call pauseVideo() again
+                }
+            }
+        }
+        
+        function onPlayerError(event, trackId) {
+            console.error(`Player error for track ${trackId}:`, event.data);
+            const trackElement = document.getElementById(`track-${trackId}`);
+            let errorMsg = "不明なエラー";
+            switch (event.data) {
+                case 2: errorMsg = "無効なパラメータ"; break;
+                case 5: errorMsg = "HTML5プレイヤーエラー"; break;
+                case 100: errorMsg = "動画が見つからないか非公開"; break;
+                case 101: case 150: errorMsg = "埋め込みが許可されていません"; break;
+            }
+             const playerContainer = trackElement?.querySelector('.player-container');
+             if(playerContainer) playerContainer.innerHTML = `<div class="player-placeholder">エラー: ${errorMsg}</div>`;
+            showMessage("プレイヤーエラー", `トラック ${trackId} でエラーが発生しました: ${errorMsg}`);
+        }
+
+
+        // --- Track Management ---
+        function addNewTrack(data = {}) {
+            const trackId = `track_${nextTrackId++}`;
+            const newTrack = {
+                id: trackId,
+                youtubeUrl: data.youtubeUrl || '',
+                videoId: data.youtubeUrl ? getYouTubeVideoId(data.youtubeUrl) : null,
+                title: data.title || `トラック ${nextTrackId}`,
+                notes: data.notes || '',
+                volume: data.volume !== undefined ? data.volume : 80,
+                originalBPM: data.originalBPM || 120, 
+                startTime: data.startTime !== undefined ? Number(data.startTime) : 0, 
+                endTime: data.endTime !== undefined ? Number(data.endTime) : 0,     
+                duration: 0, 
+                playerInstance: null,
+                isPlaying: false,
+                isSyncedToMaster: data.isSyncedToMaster !== undefined ? data.isSyncedToMaster : true, 
+                seekBarInterval: null,
+            };
+            tracks.push(newTrack);
+            renderTrack(newTrack);
+            if (newTrack.videoId) {
+                setTimeout(() => createPlayer(trackId, newTrack.videoId, newTrack), 0);
+            }
+            return newTrack;
+        }
+
+        function renderTrack(track) {
+            const trackElement = document.createElement('div');
+            trackElement.id = track.id;
+            trackElement.className = 'track bg-base-100 p-3 sm:p-4 rounded-lg shadow-md space-y-3';
+            trackElement.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                    <input type="text" value="${track.title}" placeholder="トラック名" class="track-title-input input input-sm sm:input-md input-ghost flex-grow text-lg font-semibold" title="トラック名">
+                    <button class="btn btn-xs sm:btn-sm btn-error remove-track-btn"><i class="fas fa-times mr-1"></i>削除</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text">YouTube URL</span></label>
+                        <div class="join w-full">
+                            <input type="text" value="${track.youtubeUrl}" placeholder="https://www.youtube.com/watch?v=..." class="youtube-url-input input input-bordered input-sm join-item flex-grow">
+                            <button class="btn btn-secondary btn-sm join-item load-video-btn">読込</button>
+                        </div>
+                    </div>
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text">メモ</span></label>
+                        <input type="text" value="${track.notes}" placeholder="このトラックに関するメモ" class="track-notes-input input input-bordered input-sm w-full">
+                    </div>
+                </div>
+                
+                <div class="player-container h-[150px] bg-black rounded">
+                     <div id="player-${track.id}" class="w-full h-full">
+                        ${!track.videoId ? '<div class="player-placeholder">YouTube URLを入力して「読込」を押してください</div>' : ''}
+                     </div>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs track-current-time-display">00:00.000</span>
+                        <span class="text-xs video-duration-display">00:00.000</span>
+                    </div>
+                    <input type="range" min="0" value="0" step="0.01" class="track-seek-bar range range-xs range-info">
+                </div>
+
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end mt-3">
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text">音量</span></label>
+                        <input type="range" min="0" max="100" value="${track.volume}" class="track-volume-slider range range-accent range-xs">
+                    </div>
+                    <div class="form-control">
+                        <label class="label pb-1"><span class="label-text">曲の基準BPM</span></label>
+                        <input type="number" value="${track.originalBPM}" min="30" max="300" class="track-original-bpm-input input input-bordered input-sm w-full text-center">
+                    </div>
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-2">
+                            <span class="label-text text-xs">マスターBPM同期</span>
+                            <input type="checkbox" ${track.isSyncedToMaster ? 'checked' : ''} class="track-sync-toggle toggle toggle-primary toggle-xs"/>
+                        </label>
+                    </div>
+                     <div class="flex gap-2 items-center pt-4 sm:pt-0">
+                        <button class="btn btn-sm btn-success play-pause-track-btn flex-grow"><i class="fas fa-play"></i></button>
+                        <button class="btn btn-sm btn-warning stop-track-btn flex-grow"><i class="fas fa-stop"></i></button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="label pb-1"><span class="label-text">再生区間</span></label>
+                    <div class="flex items-center gap-2 mb-1">
+                        <input type="text" value="${formatTimeWithMillis(track.startTime)}" class="start-time-text-input input input-bordered input-xs time-input" placeholder="00:00.000">
+                        <span>-</span>
+                        <input type="text" value="${formatTimeWithMillis(track.endTime)}" class="end-time-text-input input input-bordered input-xs time-input" placeholder="00:00.000">
+                    </div>
+                    <div class="track-timeline-controls relative h-[30px] flex items-center">
+                        <div class="track-timeline-bg w-full">
+                            <div class="track-timeline-selection"></div>
+                        </div>
+                        <input type="range" min="0" value="${track.startTime}" step="0.01" class="timeline-slider start-time-slider">
+                        <input type="range" min="0" value="${track.endTime}" step="0.01" class="timeline-slider end-time-slider">
+                    </div>
+                </div>
+            `;
+            tracksContainer.appendChild(trackElement);
+            addTrackEventListeners(trackElement, track);
+            updateTimelineVisual(track.id);
+        }
+
+        function addTrackEventListeners(trackElement, track) {
+            trackElement.querySelector('.remove-track-btn').addEventListener('click', () => {
+                if (track.seekBarInterval) clearInterval(track.seekBarInterval);
+                if (players[track.id]) {
+                    try { players[track.id].destroy(); } catch(e){}
+                    delete players[track.id];
+                }
+                tracks = tracks.filter(t => t.id !== track.id);
+                trackElement.remove();
+                if (currentPlayingPlaylist && currentPlayingPlaylist.trackId === track.id) {
+                    stopPlaylistPlayback(); 
+                }
+            });
+
+            trackElement.querySelector('.load-video-btn').addEventListener('click', () => {
+                const urlInput = trackElement.querySelector('.youtube-url-input');
+                const videoId = getYouTubeVideoId(urlInput.value);
+                if (videoId) {
+                    track.youtubeUrl = urlInput.value;
+                    track.videoId = videoId;
+                    track.startTime = 0; 
+                    track.endTime = 0; 
+                    track.duration = 0; 
+                    
+                    trackElement.querySelector('.start-time-slider').value = 0;
+                    trackElement.querySelector('.end-time-slider').value = 0;
+                    trackElement.querySelector('.start-time-text-input').value = formatTimeWithMillis(0);
+                    trackElement.querySelector('.end-time-text-input').value = formatTimeWithMillis(0); 
+                    trackElement.querySelector('.video-duration-display').textContent = formatTimeWithMillis(0);
+                    const seekBar = trackElement.querySelector('.track-seek-bar');
+                    seekBar.value = 0;
+                    seekBar.max = 0;
+                    trackElement.querySelector('.track-current-time-display').textContent = formatTimeWithMillis(0);
+                    
+                    updateTimelineVisual(track.id); 
+                    createPlayer(track.id, videoId, track);
+                } else {
+                    showMessage("URLエラー", "有効なYouTube動画URLを入力してください。");
+                }
+            });
+            
+            trackElement.querySelector('.track-title-input').addEventListener('change', (e) => track.title = e.target.value);
+            trackElement.querySelector('.track-notes-input').addEventListener('change', (e) => track.notes = e.target.value);
+
+            trackElement.querySelector('.track-volume-slider').addEventListener('input', (e) => {
+                track.volume = parseInt(e.target.value);
+                if (track.playerInstance?.setVolume) {
+                    track.playerInstance.setVolume(track.volume * (masterVolume / 100));
+                }
+            });
+
+            const trackOriginalBPMInput = trackElement.querySelector('.track-original-bpm-input');
+            trackOriginalBPMInput.addEventListener('change', (e) => {
+                track.originalBPM = parseInt(e.target.value) || 120; 
+                updatePlaybackRate(track.id); 
+            });
+            
+            trackElement.querySelector('.track-sync-toggle').addEventListener('change', (e) => {
+                track.isSyncedToMaster = e.target.checked;
+                updatePlaybackRate(track.id); 
+            });
+
+            const playPauseBtn = trackElement.querySelector('.play-pause-track-btn');
+            playPauseBtn.addEventListener('click', () => {
+                if (!track.playerInstance?.getPlayerState) {
+                    showMessage("エラー", "プレイヤーが準備できていません。"); return;
+                }
+                const state = track.playerInstance.getPlayerState();
+                if (state === YT.PlayerState.PLAYING) {
+                    track.playerInstance.pauseVideo();
+                } else { 
+                    const currentTime = track.playerInstance.getCurrentTime();
+                    if (currentTime >= track.endTime - 0.05 || (state === YT.PlayerState.ENDED && Math.abs(currentTime - track.startTime) < 0.1 ) ) { // Check if at end of segment or truly ended at start
+                         track.playerInstance.seekTo(track.startTime, true);
+                    } else if (state === YT.PlayerState.CUED && Math.abs(currentTime - track.startTime) > 0.1) { // If cued but not at start time (e.g. after stop)
+                        track.playerInstance.seekTo(track.startTime, true);
+                    }
+                    // else, it's paused mid-segment, play from current time
+                    
+                    updatePlaybackRate(track.id); 
+                    track.playerInstance.playVideo();
+                }
+            });
+
+            trackElement.querySelector('.stop-track-btn').addEventListener('click', () => {
+                if (track.playerInstance?.seekTo) {
+                    if (track.seekBarInterval) clearInterval(track.seekBarInterval);
+                    track.seekBarInterval = null;
+                    track.playerInstance.seekTo(track.startTime, true); 
+                    track.playerInstance.pauseVideo(); 
+                    // Update UI immediately for stop
+                    const seekBar = trackElement.querySelector('.track-seek-bar');
+                    const currentTimeDisplay = trackElement.querySelector('.track-current-time-display');
+                    if(seekBar) seekBar.value = track.startTime;
+                    if(currentTimeDisplay) currentTimeDisplay.textContent = formatTimeWithMillis(track.startTime);
+                    const playPauseBtnIcon = trackElement.querySelector('.play-pause-track-btn');
+                    if(playPauseBtnIcon) playPauseBtnIcon.innerHTML = '<i class="fas fa-play"></i>';
+                }
+            });
+            
+            const seekBar = trackElement.querySelector('.track-seek-bar');
+            seekBar.addEventListener('input', (e) => { 
+                if (track.playerInstance?.seekTo) {
+                    const seekTime = parseFloat(e.target.value);
+                    track.playerInstance.seekTo(seekTime, true);
+                    trackElement.querySelector('.track-current-time-display').textContent = formatTimeWithMillis(seekTime);
+                }
+            });
+
+
+            const startTimeTextInput = trackElement.querySelector('.start-time-text-input');
+            const endTimeTextInput = trackElement.querySelector('.end-time-text-input');
+            const startTimeSlider = trackElement.querySelector('.start-time-slider');
+            const endTimeSlider = trackElement.querySelector('.end-time-slider');
+
+            function handleTimeTextInput(inputElement, targetProp, sliderElement) {
+                let newTime = parseTimeWithMillis(inputElement.value);
+                 // Ensure newTime is within valid bounds (0 to track.duration)
+                newTime = Math.max(0, newTime);
+                if (track.duration > 0) {
+                    newTime = Math.min(newTime, track.duration);
+                }
+
+
+                if (targetProp === 'startTime') {
+                    if (track.duration > 0 && newTime >= track.endTime) { // Prevent start from exceeding end
+                        newTime = Math.max(0, track.endTime - 0.01); // Ensure positive or zero
+                    }
+                    track.startTime = newTime;
+                } else { // endTime
+                    if (track.duration > 0 && newTime <= track.startTime) { // Prevent end from being less than start
+                        newTime = Math.min(track.duration, track.startTime + 0.01);
+                    }
+                     track.endTime = newTime;
+                }
+                
+                // Final bound check
+                track.startTime = Math.max(0, track.startTime);
+                if (track.duration > 0) {
+                    track.startTime = Math.min(track.startTime, track.duration);
+                    track.endTime = Math.max(0, track.endTime);
+                    track.endTime = Math.min(track.endTime, track.duration);
+                     if (track.startTime >= track.endTime) { // One last check
+                        track.startTime = Math.max(0, track.endTime - 0.01);
+                    }
+                }
+
+
+                sliderElement.value = track[targetProp]; // This might be redundant if input event on slider triggers its own update
+                inputElement.value = formatTimeWithMillis(track[targetProp]); 
+                updateTimelineVisual(track.id);
+                 if (track.playerInstance?.getPlayerState && track.playerInstance.getPlayerState() !== YT.PlayerState.PLAYING) {
+                     track.playerInstance.seekTo(track.startTime, true);
+                }
+            }
+            startTimeTextInput.addEventListener('change', () => handleTimeTextInput(startTimeTextInput, 'startTime', startTimeSlider));
+            endTimeTextInput.addEventListener('change', () => handleTimeTextInput(endTimeTextInput, 'endTime', endTimeSlider));
+            
+            function handleTimeSliderChange(event) {
+                if (!track.duration) return; 
+
+                let start = parseFloat(startTimeSlider.value);
+                let end = parseFloat(endTimeSlider.value);
+                const minGap = 0.01; 
+
+                if (event.target === startTimeSlider) { 
+                    if (start >= end - minGap) start = Math.max(0, end - minGap);
+                } else { 
+                     if (end <= start + minGap) end = Math.min(track.duration, start + minGap);
+                }
+                
+                track.startTime = Math.max(0, Math.min(start, track.duration - minGap));
+                track.endTime = Math.min(track.duration, Math.max(end, track.startTime + minGap));
+
+                // Update text inputs when sliders change
+                startTimeTextInput.value = formatTimeWithMillis(track.startTime);
+                endTimeTextInput.value = formatTimeWithMillis(track.endTime);
+
+                updateTimelineVisual(track.id);
+
+                if (track.playerInstance?.getPlayerState && track.playerInstance.getPlayerState() !== YT.PlayerState.PLAYING) {
+                     track.playerInstance.seekTo(track.startTime, true);
+                }
+            }
+
+            startTimeSlider.addEventListener('input', handleTimeSliderChange);
+            endTimeSlider.addEventListener('input', handleTimeSliderChange);
+            
+            updateTimelineVisual(track.id);
+        }
+
+        function updateTimelineVisual(trackId) {
+            const track = tracks.find(t => t.id === trackId);
+            const trackElement = document.getElementById(trackId);
+            if (!track || !trackElement ) { 
+                return;
+            }
+
+            const selectionDiv = trackElement.querySelector('.track-timeline-selection');
+            const safeStartTime = Number(track.startTime) || 0;
+            // Ensure safeEndTime considers duration; if duration is 0, endTime should also effectively be 0 for percentage.
+            const safeEndTime = track.duration > 0 ? (Number(track.endTime) || track.duration) : 0;
+            const safeDuration = Number(track.duration) || 0;
+
+            if (safeDuration > 0) {
+                const startPercent = (safeStartTime / safeDuration) * 100;
+                const endPercent = (safeEndTime / safeDuration) * 100;
+                const widthPercent = Math.max(0, Math.min(100, endPercent - startPercent)); // Clamp width
+
+                selectionDiv.style.left = `${Math.max(0, Math.min(100,startPercent))}%`; // Clamp left
+                selectionDiv.style.width = `${widthPercent}%`;
+            } else { 
+                selectionDiv.style.left = `0%`;
+                selectionDiv.style.width = `0%`;
+            }
+        }
+
+
+        function updateAllPlaybackRates(syncToMaster = false) {
+            tracks.forEach(track => {
+                if (syncToMaster) {
+                    track.isSyncedToMaster = true; 
+                    const trackElement = document.getElementById(track.id);
+                    if (trackElement) {
+                        const syncToggle = trackElement.querySelector('.track-sync-toggle');
+                        if (syncToggle) syncToggle.checked = true;
+                    }
+                }
+                updatePlaybackRate(track.id);
+            });
+        }
+
+        function updatePlaybackRate(trackId) {
+            const track = tracks.find(t => t.id === trackId);
+            if (!track || !track.playerInstance?.setPlaybackRate || !track.originalBPM || track.originalBPM <= 0) return;
+
+            let rate;
+            if (track.isSyncedToMaster) {
+                rate = masterBPM / track.originalBPM;
+            } else {
+                rate = 1.0; 
+            }
+            track.playerInstance.setPlaybackRate(rate);
+        }
+        
+        function updateAllTrackVolumes() {
+            tracks.forEach(track => {
+                if (track.playerInstance?.setVolume) {
+                    track.playerInstance.setVolume(track.volume * (masterVolume / 100));
+                }
+            });
+        }
+        
+        function handleTapTempo(timesArray, callbackUpdate, displayElement = null) {
+            const now = Date.now();
+            timesArray.push(now);
+            if (timesArray.length > MAX_TAP_TEMPO_TIMES) {
+                timesArray.shift(); 
+            }
+            if (timesArray.length > 1) {
+                const intervals = [];
+                for (let i = 1; i < timesArray.length; i++) {
+                    intervals.push(timesArray[i] - timesArray[i-1]);
+                }
+                const avgInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
+                if (avgInterval > 0) {
+                    const calculatedBPM = Math.round(60000 / avgInterval);
+                    const newBpm = Math.max(30, Math.min(300, calculatedBPM));
+                    if (callbackUpdate) callbackUpdate(newBpm);
+                    if (displayElement) displayElement.textContent = `BPM: ${newBpm}`;
+                }
+            } else if (displayElement) {
+                displayElement.textContent = "BPM: TAP...";
+            }
+        }
+
+
+        // --- Master Controls Event Listeners ---
+        masterBPMInput.addEventListener('change', (e) => {
+            masterBPM = parseInt(e.target.value) || 120;
+            updateAllPlaybackRates(); 
+        });
+        masterTapTempoBtn.addEventListener('click', () => {
+            handleTapTempo(masterTapTempoTimes, (newBPM) => {
+                masterBPM = newBPM;
+                masterBPMInput.value = masterBPM;
+                updateAllPlaybackRates();
+            });
+            masterTapTempoBtn.classList.add('btn-active');
+            setTimeout(() => masterTapTempoBtn.classList.remove('btn-active'), 150);
+        });
+        
+        globalTapTempoBtn.addEventListener('click', () => {
+            handleTapTempo(globalTapTempoTimes_measurement, null, globalTapBPMDisplay);
+            globalTapTempoBtn.classList.add('btn-active');
+            setTimeout(() => {
+                globalTapTempoBtn.classList.remove('btn-active');
+                setTimeout(() => {
+                    if (globalTapTempoTimes_measurement.length < 2 || (Date.now() - globalTapTempoTimes_measurement[globalTapTempoTimes_measurement.length -1] > 2000) ) {
+                         globalTapBPMDisplay.textContent = "BPM: ---";
+                         globalTapTempoTimes_measurement = []; 
+                    }
+                }, 2000);
+            }, 150);
+        });
+
+
+        masterVolumeInput.addEventListener('input', (e) => {
+            masterVolume = parseInt(e.target.value);
+            updateAllTrackVolumes();
+        });
+        
+        addTrackBtn.addEventListener('click', () => addNewTrack());
+
+        playAllBtn.addEventListener('click', () => {
+            stopPlaylistPlayback(); 
+            updateAllPlaybackRates(true); 
+            let delay = 0;
+            tracks.forEach(track => {
+                if (track.playerInstance?.playVideo) {
+                    setTimeout(() => { 
+                        track.playerInstance.seekTo(track.startTime, true);
+                        track.playerInstance.playVideo();
+                    }, delay);
+                    delay += 50; 
+                }
+            });
+        });
+
+        pauseAllBtn.addEventListener('click', () => {
+            stopPlaylistPlayback();
+            tracks.forEach(track => {
+                if (track.playerInstance?.pauseVideo) {
+                    track.playerInstance.pauseVideo();
+                }
+            });
+            isPlaylistPaused = true; 
+        });
+
+        // --- Save/Load Mashup Functionality ---
+        saveMashupBtn.addEventListener('click', () => {
+            mashupNameInput.value = ''; 
+            saveMashupModal.showModal();
+        });
+
+        confirmSaveMashupBtn.addEventListener('click', async () => {
+            const name = mashupNameInput.value.trim();
+            if (!name) { showMessage("入力エラー", "マッシュアップ名を入力してください。"); return; }
+            const mashupData = {
+                name: name,
+                masterBPM: masterBPM,
+                masterVolume: masterVolume,
+                tracks: tracks.map(t => ({ 
+                    youtubeUrl: t.youtubeUrl, title: t.title, notes: t.notes,
+                    volume: t.volume, originalBPM: t.originalBPM, 
+                    startTime: t.startTime, endTime: t.endTime, 
+                    isSyncedToMaster: t.isSyncedToMaster,
+                })),
+                createdAt: new Date().toISOString()
+            };
+            await saveMashup(mashupData);
+            saveMashupModal.close();
+        });
+
+        loadMashupBtn.addEventListener('click', async () => {
+            await populateLoadMashupModal();
+            if (!loadMashupModal.open) loadMashupModal.showModal();
+        });
+
+        async function populateLoadMashupModal() { 
+            const savedMashups = await getMashups();
+            mashupListContainer.innerHTML = ''; 
+            if (savedMashups.length === 0) {
+                mashupListContainer.innerHTML = '<p class="text-center text-base-content/70">保存されたマッシュアップはありません。</p>';
+                return;
+            }
+            savedMashups.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); 
+
+            savedMashups.forEach(mashup => {
+                const item = document.createElement('div');
+                item.className = 'p-3 bg-base-200 rounded-md shadow flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2';
+                item.innerHTML = `
+                    <div class="flex-grow">
+                        <h4 class="font-semibold">${mashup.name}</h4>
+                        <p class="text-xs text-base-content/70">${new Date(mashup.createdAt).toLocaleString()}</p>
+                        <p class="text-xs text-base-content/70">${mashup.tracks.length} トラック</p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="btn btn-xs btn-primary load-this-mashup-btn" data-id="${mashup.id}"><i class="fas fa-edit mr-1"></i>編集</button>
+                        <button class="btn btn-xs btn-secondary play-this-mashup-btn" data-id="${mashup.id}"><i class="fas fa-play mr-1"></i>再生</button>
+                        <button class="btn btn-xs btn-accent add-to-playlist-btn" data-id="${mashup.id}" data-name="${mashup.name}"><i class="fas fa-plus-square mr-1"></i>リストへ</button>
+                        <button class="btn btn-xs btn-error delete-this-mashup-btn" data-id="${mashup.id}"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                mashupListContainer.appendChild(item);
+
+                item.querySelector('.load-this-mashup-btn').addEventListener('click', async () => {
+                    const fullMashup = await getMashupById(mashup.id);
+                    if (fullMashup) {
+                        loadMashupToEditor(fullMashup);
+                        loadMashupModal.close();
+                    }
+                });
+                item.querySelector('.play-this-mashup-btn').addEventListener('click', async () => {
+                    const fullMashup = await getMashupById(mashup.id);
+                    if (fullMashup) {
+                        await loadMashupToEditor(fullMashup); 
+                        setTimeout(() => playAllBtn.click(), 200); 
+                        loadMashupModal.close();
+                    }
+                });
+                 item.querySelector('.add-to-playlist-btn').addEventListener('click', () => {
+                    mashupIdToAddToPlaylistInput.value = mashup.id;
+                    populateAddToPlaylistModal();
+                    if(!addToPlaylistModal.open) addToPlaylistModal.showModal();
+                });
+                item.querySelector('.delete-this-mashup-btn').addEventListener('click', () => {
+                    showMessage(
+                        "削除確認", `マッシュアップ「${mashup.name}」を本当に削除しますか？この操作は元に戻せません。`,
+                        async () => { await deleteMashup(mashup.id); }, true 
+                    );
+                });
+            });
+        }
+        
+        async function loadMashupToEditor(mashupData) { 
+            showLoading();
+            stopPlaylistPlayback();
+            tracksContainer.innerHTML = '';
+            tracks.forEach(track => {
+                if (track.seekBarInterval) clearInterval(track.seekBarInterval);
+                if (players[track.id]) { try { players[track.id].destroy(); } catch(e){} delete players[track.id]; }
+            });
+            tracks = []; players = {}; nextTrackId = 0; 
+
+            masterBPM = mashupData.masterBPM;
+            masterVolume = mashupData.masterVolume;
+            masterBPMInput.value = masterBPM;
+            masterVolumeInput.value = masterVolume; 
+
+            return new Promise(resolve => {
+                if (!mashupData.tracks || mashupData.tracks.length === 0) {
+                    showLoading(false);
+                    showMessage("成功", `マッシュアップ「${mashupData.name}」を読み込みました！`);
+                    resolve(); return;
+                }
+                mashupData.tracks.forEach(trackData => addNewTrack({
+                    ...trackData,
+                    originalBPM: trackData.originalBPM || 120 
+                }));
+                setTimeout(() => {
+                    updateAllTrackVolumes(); 
+                    updateAllPlaybackRates(); 
+                    showLoading(false);
+                    showMessage("成功", `マッシュアップ「${mashupData.name}」を読み込みました！`);
+                    resolve();
+                }, 500 + mashupData.tracks.length * 100); 
+            });
+         }
+
+        // --- Playlist Functionality (largely unchanged) ---
+        playlistMenuBtn.addEventListener('click', async () => { 
+            switchToViewPlaylistsTab(); 
+            await populatePlaylistsTab();
+            if (!playlistMenuModal.open) playlistMenuModal.showModal();
+        });
+        function switchToViewPlaylistsTab() { 
+            playlistMenuModal.querySelectorAll('.tab').forEach(tb => tb.classList.remove('tab-active'));
+            playlistMenuModal.querySelector('[data-tab-target="viewPlaylistsTabContent"]').classList.add('tab-active');
+            viewPlaylistsTabContent.classList.remove('hidden');
+            createOrEditPlaylistTabContent.classList.add('hidden');
+        }
+        function switchToCreateEditTab(playlistToEdit = null) { 
+            playlistMenuModal.querySelectorAll('.tab').forEach(tb => tb.classList.remove('tab-active'));
+            playlistMenuModal.querySelector('[data-tab-target="createOrEditPlaylistTabContent"]').classList.add('tab-active');
+            viewPlaylistsTabContent.classList.add('hidden');
+            createOrEditPlaylistTabContent.classList.remove('hidden');
+            
+            populateMashupsForPlaylistForm(playlistToEdit ? playlistToEdit.mashupIds : []);
+            
+            if (playlistToEdit) {
+                editingPlaylistIdInput.value = playlistToEdit.id;
+                playlistFormTitle.textContent = "再生リストを編集:";
+                playlistNameInput.value = playlistToEdit.name;
+                playlistRepeatToggle.checked = playlistToEdit.repeat || false;
+                playlistShuffleToggle.checked = playlistToEdit.shuffle || false;
+                saveOrUpdatePlaylistBtn.textContent = "更新";
+                cancelPlaylistEditBtn.classList.remove('hidden');
+            } else {
+                editingPlaylistIdInput.value = '';
+                playlistFormTitle.textContent = "新しい再生リスト名:";
+                playlistNameInput.value = '';
+                playlistRepeatToggle.checked = false;
+                playlistShuffleToggle.checked = false;
+                saveOrUpdatePlaylistBtn.textContent = "作成";
+                cancelPlaylistEditBtn.classList.add('hidden');
+            }
+        }
+        cancelPlaylistEditBtn.addEventListener('click', switchToViewPlaylistsTab);
+        playlistMenuModal.querySelectorAll('.tab').forEach(tabButton => { 
+            tabButton.addEventListener('click', async () => {
+                const targetId = tabButton.dataset.tabTarget;
+                if (targetId === "viewPlaylistsTabContent") {
+                    switchToViewPlaylistsTab();
+                    await populatePlaylistsTab();
+                } else if (targetId === "createOrEditPlaylistTabContent") {
+                    switchToCreateEditTab(); 
+                }
+            });
+        });
+        async function populatePlaylistsTab() { 
+            const playlists = await getPlaylists();
+            playlistsListContainer.innerHTML = '';
+            if (playlists.length === 0) {
+                playlistsListContainer.innerHTML = '<p class="text-center text-base-content/70">作成された再生リストはありません。「新規作成/編集」タブから作成できます。</p>';
+                return;
+            }
+            playlists.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            playlists.forEach(pl => {
+                const item = document.createElement('div');
+                item.className = 'p-3 bg-base-300 rounded-md shadow flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2';
+                item.innerHTML = `
+                    <div class="flex-grow">
+                        <h4 class="font-semibold">${pl.name}</h4>
+                        <p class="text-xs text-base-content/70">${pl.mashupIds?.length || 0} 曲 | リピート: ${pl.repeat ? 'オン' : 'オフ'} | シャッフル: ${pl.shuffle ? 'オン' : 'オフ'}</p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button class="btn btn-xs btn-primary play-playlist-btn" data-id="${pl.id}"><i class="fas fa-play-circle mr-1"></i>再生</button>
+                        <button class="btn btn-xs btn-secondary edit-playlist-btn" data-id="${pl.id}"><i class="fas fa-edit mr-1"></i>編集</button>
+                        <button class="btn btn-xs btn-error delete-playlist-btn" data-id="${pl.id}"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                playlistsListContainer.appendChild(item);
+                
+                item.querySelector('.delete-playlist-btn').addEventListener('click', () => {
+                     showMessage("削除確認", `再生リスト「${pl.name}」を本当に削除しますか？`,
+                        async () => { await deletePlaylist(pl.id); }, true );
+                });
+                item.querySelector('.edit-playlist-btn').addEventListener('click', async () => {
+                    const fullPlaylist = await getPlaylistById(pl.id);
+                    if (fullPlaylist) switchToCreateEditTab(fullPlaylist);
+                });
+                item.querySelector('.play-playlist-btn').addEventListener('click', async () => {
+                    await startPlaylistPlayback(pl.id);
+                    playlistMenuModal.close();
+                });
+            });
+        }
+        let draggedMashupElement = null; 
+        async function populateMashupsForPlaylistForm(selectedMashupIds = []) { 
+            const allMashups = await getMashups();
+            mashupsForPlaylistContainer.innerHTML = '';
+            if (allMashups.length === 0) {
+                mashupsForPlaylistContainer.innerHTML = '<p class="text-center text-base-content/70">追加できるマッシュアップがありません。</p>';
+                return;
+            }
+
+            const selectedObjects = [];
+            selectedMashupIds.forEach(id => {
+                const mashup = allMashups.find(m => m.id === id);
+                if (mashup) selectedObjects.push(mashup);
+            });
+            
+            const unselectedObjects = allMashups.filter(m => !selectedMashupIds.includes(m.id));
+            
+            const renderMashupItem = (mashup, isSelected) => {
+                const div = document.createElement('div');
+                div.className = `label cursor-grab justify-start gap-2 p-2 hover:bg-base-content/10 rounded-md ${isSelected ? 'bg-primary/20' : 'bg-base-100'}`;
+                div.draggable = true;
+                div.dataset.mashupId = mashup.id;
+                div.innerHTML = `
+                    <input type="checkbox" class="checkbox checkbox-primary checkbox-sm" value="${mashup.id}" ${isSelected ? 'checked' : ''} />
+                    <span class="label-text">${mashup.name}</span>
+                `;
+                div.addEventListener('dragstart', (e) => {
+                    draggedMashupElement = e.target.closest('div[draggable="true"]');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.target.closest('div[draggable="true"]').classList.add('opacity-50');
+                });
+                div.addEventListener('dragend', (e) => {
+                     e.target.closest('div[draggable="true"]').classList.remove('opacity-50');
+                    draggedMashupElement = null;
+                });
+                return div;
+            };
+
+            selectedObjects.forEach(m => mashupsForPlaylistContainer.appendChild(renderMashupItem(m, true)));
+            unselectedObjects.forEach(m => mashupsForPlaylistContainer.appendChild(renderMashupItem(m, false)));
+
+            mashupsForPlaylistContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const targetElement = e.target.closest('div[draggable="true"]');
+                if (targetElement && draggedMashupElement && targetElement !== draggedMashupElement) {
+                    const rect = targetElement.getBoundingClientRect();
+                    const isAfter = e.clientY > rect.top + rect.height / 2;
+                    if (isAfter) {
+                        targetElement.parentNode.insertBefore(draggedMashupElement, targetElement.nextSibling);
+                    } else {
+                        targetElement.parentNode.insertBefore(draggedMashupElement, targetElement);
+                    }
+                }
+            });
+        }
+        saveOrUpdatePlaylistBtn.addEventListener('click', async () => { 
+            const name = playlistNameInput.value.trim();
+            if (!name) { showMessage("入力エラー", "再生リスト名を入力してください。"); return; }
+
+            const orderedMashupIds = Array.from(mashupsForPlaylistContainer.querySelectorAll('div[draggable="true"]'))
+                                         .filter(div => div.querySelector('input[type="checkbox"]').checked)
+                                         .map(div => parseInt(div.dataset.mashupId));
+            
+            const playlistData = {
+                name: name,
+                mashupIds: orderedMashupIds,
+                repeat: playlistRepeatToggle.checked,
+                shuffle: playlistShuffleToggle.checked,
+                createdAt: editingPlaylistIdInput.value ? undefined : new Date().toISOString(), 
+                updatedAt: new Date().toISOString()
+            };
+
+            const editingId = editingPlaylistIdInput.value ? parseInt(editingPlaylistIdInput.value) : null;
+            if (editingId) {
+                playlistData.id = editingId;
+                const existingPlaylist = await getPlaylistById(editingId);
+                if (existingPlaylist) playlistData.createdAt = existingPlaylist.createdAt;
+            }
+            
+            await saveOrUpdatePlaylist(playlistData);
+            await populatePlaylistsTab(); 
+            switchToViewPlaylistsTab();
+        });
+        async function populateAddToPlaylistModal() { 
+            const playlists = await getPlaylists();
+            availablePlaylistsForAddingContainer.innerHTML = '';
+            if (playlists.length === 0) {
+                availablePlaylistsForAddingContainer.innerHTML = '<p class="text-center text-base-content/70">追加先の再生リストがありません。</p>';
+                return;
+            }
+            playlists.sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+            playlists.forEach(pl => {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-outline btn-primary w-full justify-start';
+                btn.textContent = pl.name;
+                btn.onclick = async () => {
+                    const mashupId = parseInt(mashupIdToAddToPlaylistInput.value);
+                    if (!pl.mashupIds) pl.mashupIds = [];
+                    if (!pl.mashupIds.includes(mashupId)) {
+                        pl.mashupIds.push(mashupId);
+                        await saveOrUpdatePlaylist(pl);
+                        showMessage("成功", `マッシュアップを再生リスト「${pl.name}」に追加しました。`);
+                    } else {
+                        showMessage("情報", `このマッシュアップは既に再生リスト「${pl.name}」に含まれています。`);
+                    }
+                    addToPlaylistModal.close();
+                };
+                availablePlaylistsForAddingContainer.appendChild(btn);
+            });
+        }
+        
+        // --- Playlist Playback Logic ---
+        async function startPlaylistPlayback(playlistId) { 
+            const playlist = await getPlaylistById(playlistId);
+            if (!playlist || !playlist.mashupIds || playlist.mashupIds.length === 0) {
+                showMessage("再生エラー", "この再生リストは空か、見つかりませんでした。");
+                return;
+            }
+            
+            currentPlayingPlaylist = {
+                playlistId: playlist.id,
+                name: playlist.name,
+                mashupIds: playlist.shuffle ? [...playlist.mashupIds].sort(() => 0.5 - Math.random()) : [...playlist.mashupIds],
+                currentIndex: 0,
+                repeat: playlist.repeat,
+                shuffle: playlist.shuffle,
+                trackId: null 
+            };
+            isPlaylistPaused = false;
+            await playNextMashupInPlaylist();
+        }
+        async function playNextMashupInPlaylist() { 
+            if (!currentPlayingPlaylist || isPlaylistPaused) return;
+
+            const { mashupIds, currentIndex, repeat } = currentPlayingPlaylist;
+
+            if (currentIndex >= mashupIds.length) { 
+                if (repeat) {
+                    currentPlayingPlaylist.currentIndex = 0;
+                    if (currentPlayingPlaylist.shuffle) { 
+                         currentPlayingPlaylist.mashupIds = [...mashupIds].sort(() => 0.5 - Math.random());
+                    }
+                } else {
+                    showMessage("再生リスト終了", `再生リスト「${currentPlayingPlaylist.name}」の再生が完了しました。`);
+                    stopPlaylistPlayback();
+                    return;
+                }
+            }
+            
+            const nextMashupId = currentPlayingPlaylist.mashupIds[currentPlayingPlaylist.currentIndex];
+            const mashupData = await getMashupById(nextMashupId);
+
+            if (mashupData) {
+                showMessage("プレイリスト再生中", `次の曲: ${mashupData.name} (再生リスト: ${currentPlayingPlaylist.name})`);
+                await loadMashupToEditor(mashupData); 
+                
+                if (tracks.length > 0) {
+                    currentPlayingPlaylist.trackId = tracks[0].id; 
+                } else {
+                     console.warn("Loaded mashup has no tracks for playlist progression.");
+                     currentPlayingPlaylist.currentIndex++;
+                     playNextMashupInPlaylist(); 
+                     return;
+                }
+
+                setTimeout(() => { 
+                    updateAllPlaybackRates(true); 
+                    tracks.forEach((track, index) => {
+                        if (track.playerInstance?.playVideo) {
+                            setTimeout(() => {
+                                track.playerInstance.seekTo(track.startTime, true);
+                                track.playerInstance.playVideo();
+                            }, index * 50); 
+                        }
+                    });
+                    currentPlayingPlaylist.currentIndex++;
+                }, 300); 
+            } else {
+                showMessage("再生エラー", `マッシュアップID ${nextMashupId} が見つかりませんでした。スキップします。`);
+                currentPlayingPlaylist.currentIndex++;
+                playNextMashupInPlaylist(); 
+            }
+        }
+        function stopPlaylistPlayback() { 
+            if (currentPlayingPlaylist) {
+                const currentPlaylistTrack = tracks.find(t => t.id === currentPlayingPlaylist.trackId);
+                if (currentPlaylistTrack && currentPlaylistTrack.seekBarInterval) { 
+                    clearInterval(currentPlaylistTrack.seekBarInterval);
+                    currentPlaylistTrack.seekBarInterval = null;
+                }
+            }
+            currentPlayingPlaylist = null;
+            isPlaylistPaused = false;
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            showLoading();
+            try {
+                await initDB();
+                console.log("Database initialized.");
+                masterBPMInput.value = masterBPM;
+                masterVolumeInput.value = masterVolume; 
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                showMessage("初期化エラー", "アプリの初期化中に問題が発生しました。ページを再読み込みしてみてください。");
+            } finally {
+                showLoading(false);
+            }
+        });
+
+    </script>
+</body>
+</html>
